@@ -9,29 +9,31 @@ services:
       - FLASK_ENV=development
       - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
     depends_on:
       - db
       - redis
 
   worker:
     build: .
-    command: celery -A worker.celery worker --loglevel=info --pool=solo
+    command: celery -A app.tasks.celery worker --loglevel=info --uid=nobody --gid=nogroup --pool=solo
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
     depends_on:
       - db
       - redis
 
   beat:
     build: .
-    command: celery -A worker.celery beat --loglevel=info
+    command: celery -A app.tasks.celery beat --loglevel=info
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
+    volumes:
+      - .:/app
     depends_on:
       - db
       - redis
