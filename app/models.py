@@ -1,13 +1,14 @@
-from app import db
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
 
 class Article(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255))
-    summary = db.Column(db.Text)
-    content = db.Column(db.Text)
-    translated_content = db.Column(db.Text)
-    source_url = db.Column(db.String(255))
-    published_date = db.Column(db.DateTime)
+    title = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    translated_title = db.Column(db.String(255), nullable=False)
+    translated_content = db.Column(db.Text, nullable=False)
+    published_date = db.Column(db.DateTime, default=db.func.now())
 
     def __repr__(self):
-        return f'<Article {self.title}>'
+        return f"<Article {self.title}>"

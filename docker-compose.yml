@@ -1,54 +1,52 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
-    ports:
-      - "5000:5000"
-    environment:
-      - FLASK_ENV=development
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
-    depends_on:
-      - db
-      - redis
-
-  worker:
-    build: .
-    command: celery -A app.tasks.celery worker --loglevel=info --uid=nobody --gid=nogroup --pool=solo
-    environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
-    depends_on:
-      - db
-      - redis
-
-  beat:
-    build: .
-    command: celery -A app.tasks.celery beat --loglevel=info
-    environment:
-      - SQLALCHEMY_DATABASE_URI=postgresql://postgres:12059001@db/rss_db
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - result_backend=redis://redis:6379/0  # Используем новое имя настройки
-    volumes:
-      - .:/app
-    depends_on:
-      - db
-      - redis
-
   db:
     image: postgres:13
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=12059001
-      - POSTGRES_DB=rss_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12059001
+      POSTGRES_DB: rss_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - rss_network
 
   redis:
     image: redis:6
+    networks:
+      - rss_network
+
+  web:
+    build: .
+    command: gunicorn -w 1 -b 0.0.0.0:5000 --timeout 60 run:app
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - rss_network
+
+  worker:
+    build: .
+    command: celery -A worker.celery worker --loglevel=info
+    depends_on:
+      - redis
+    networks:
+      - rss_network
+
+  beat:
+    build: .
+    command: celery -A worker.celery beat --loglevel=info
+    depends_on:
+      - redis
+    networks:
+      - rss_network
 
 volumes:
-  postgres_data:
+  db_data:
+
+networks:
+  rss_network:
+    driver: bridge

@@ -1,5 +1,8 @@
-from app.tasks import celery
 from app import create_app
+from app.tasks import configure_celery
 
 app = create_app()
-app.app_context().push()
+celery = configure_celery(app)
+
+if __name__ == '__main__':
+    celery.start()

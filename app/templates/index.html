@@ -1,12 +1,55 @@
-{% extends "base.html" %}
-{% block content %}
-<h1>Latest Articles</h1>
-<ul>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мой RSS-сайт</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        article {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        p {
+            color: #555;
+            line-height: 1.6;
+        }
+        small {
+            color: #888;
+            font-size: 0.9em;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Переведенные статьи</h1>
     {% for article in articles %}
-    <li>
-        <a href="{{ url_for('main.article', id=article.id) }}">{{ article.title }}</a>
-        <p>{{ article.summary }}</p>
-    </li>
+        <article>
+            <h2>{{ article.translated_title }}</h2>
+            <p>{{ article.translated_content }}</p>
+            <small>Опубликовано: {{ article.published_date }}</small>
+            <hr>
+        </article>
     {% endfor %}
-</ul>
-{% endblock %}
+</body>
+</html>

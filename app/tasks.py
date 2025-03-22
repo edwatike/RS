@@ -1,55 +1,67 @@
-from celery import Celery
-from app import create_app, db
 import feedparser
-from bs4 import BeautifulSoup
-import requests
-from deepl import Translator
+import deepl
+from celery import Celery
+from celery.schedules import crontab
 from app.models import Article
-from datetime import datetime
+from config import Config
+from app import db
 
-app = create_app()
-celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
-celery.conf.result_backend = app.config['result_backend']  # Используем новое имя настройки
-celery.conf.beat_schedule_filename = '/app/celerybeat-schedule'
-celery.conf.broker_connection_retry_on_startup = True
+def configure_celery(app):
+    celery = Celery(
+        'app',
+        broker=Config.broker_url,
+        backend=Config.result_backend,
+        include=['app.tasks']
+    )
 
-@celery.task(bind=True)
-def parse_rss_feeds(self):
-    try:
-        feeds = [
-            'https://towardsdatascience.com/feed',
-            'https://venturebeat.com/feed/',
-            'https://rss.app/feeds/PNcbNOcr3uiLMKOm.xml'
-        ]
-        for feed_url in feeds:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries:
-                if not Article.query.filter_by(source_url=entry.link).first():
-                    article = Article(
-                        title=entry.title,
-                        summary=entry.summary,
-                        content=get_full_content(entry.link),
-                        source_url=entry.link,
-                        published_date=datetime.strptime(entry.published, '%a, %d %b %Y %H:%M:%S %z')
-                    )
-                    db.session.add(article)
-                    db.session.commit()
-                    translate_article.delay(article.id)
-    except Exception as e:
-        self.retry(exc=e, countdown=60)
+    celery.conf.update(
+        beat_schedule={
+            'parse-rss-every-5-minutes': {
+                'task': 'app.tasks.parse_and_translate_rss',
+                'schedule': crontab(minute='*/5'),  # Каждые 5 минут
+            },
+        },
+        timezone='UTC',
+        broker_connection_retry_on_startup=True
+    )
 
-def get_full_content(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    return str(soup.find('article') or soup.find('body'))
+    # Устанавливаем контекст приложения для Celery
+    celery.conf.update(app.config)
 
-@celery.task(bind=True)
-def translate_article(self, article_id):
-    try:
-        article = Article.query.get(article_id)
-        translator = Translator(app.config['DEEPL_API_KEY'])
-        article.translated_content = translator.translate_text(article.content, target_lang='RU').text
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery.Task = ContextTask
+
+    @celery.task
+    def parse_and_translate_rss():
+        feed_url = "https://towardsdatascience.com/feed"
+        feed = feedparser.parse(feed_url)
+        
+        translator = deepl.Translator(Config.DEEPL_API_KEY)
+        
+        for entry in feed.entries:
+            # Проверяем, существует ли статья в базе данных
+            existing_article = Article.query.filter_by(link=entry.link).first()
+            if existing_article:
+                continue
+            
+            # Переводим заголовок и описание
+            title = translator.translate_text(entry.title, target_lang="RU").text
+            summary = translator.translate_text(entry.summary, target_lang="RU").text
+            
+            # Сохраняем статью в базу данных
+            article = Article(
+                title=title,
+                summary=summary,
+                link=entry.link,
+                published_date=entry.published_parsed
+            )
+            db.session.add(article)
+        
         db.session.commit()
-    except Exception as e:
-        self.retry(exc=e, countdown=60)
+        print(f"Processed {len(feed.entries)} articles from {feed_url}")
+
+    return celery
