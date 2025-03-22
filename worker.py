@@ -1,8 +1,9 @@
 from app import create_app
-from app.tasks import configure_celery
 
 app = create_app()
-celery = configure_celery(app)
+celery = app.celery
 
-if __name__ == '__main__':
-    celery.start()
+# Пример задачи
+@celery.task
+def example_task():
+    print("Example task is running!")
